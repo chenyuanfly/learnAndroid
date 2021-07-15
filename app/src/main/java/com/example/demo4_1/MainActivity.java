@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -51,6 +52,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ListView mPlaylist;
     private MediaCursorAdapter mCursorAdapter;
     private Cursor mCursor;
+
+    public static final String DATA_URI = "com.example.demo4_1.DATE_URI";
+    public static final String TITLE = "com.example.demo4_1.TITLE";
+    public static final String ARTIST = "com.example.demo4_1.ARTIST";
 
     private final String SELECTION =
             MediaStore.Audio.Media.IS_MUSIC + " = ? " + " AND " +
@@ -134,6 +139,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         navigation.setVisibility(View.GONE);
 
+        //绑定音乐切换监听事件
         mPlaylist.setOnItemClickListener(setAdapter);
     }
 
@@ -172,11 +178,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 Long albumId = cursor.getLong(albumIdIndex);
                 String data = cursor.getString(dataIndex);
 
+                Uri dataUri = Uri.parse(data);
+
+                if (mMediaPlayer != null) {
+                    try {
+                        mMediaPlayer.reset();
+                        mMediaPlayer.setDataSource(
+                                MainActivity.this , dataUri);
+                        mMediaPlayer.prepare();
+                        mMediaPlayer.start();
+
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+
                 navigation.setVisibility(View.VISIBLE);
 
                 if (tvBottomTitle != null) {
                     tvBottomTitle.setText(title);
-                 }
+                }
 
                 if (tvBottomArtist != null) {
                     tvBottomArtist.setText(artist);
@@ -221,6 +242,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         cursor.close();
                     }
                 }
+
+                Intent serviceIntent = new Intent(MainActivity.this, MusicService.class);
+                serviceIntent.putExtra(MainActivity.DATA_URI, data);
+                serviceIntent.putExtra(MainActivity.TITLE, title);
+                serviceIntent.putExtra(MainActivity.ARTIST, artist);
+
+                startService(serviceIntent);
             }
         }
     };

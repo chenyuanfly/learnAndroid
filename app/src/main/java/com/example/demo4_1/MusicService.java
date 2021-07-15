@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.icu.text.CaseMap;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
@@ -32,6 +33,8 @@ public class MusicService extends Service {
     private static final String CHANNEL_ID = "Music channel";
     NotificationManager mNotificationManager;
 
+    private IBinder mBinder;
+
     public MusicService() {
     }
 
@@ -47,11 +50,14 @@ public class MusicService extends Service {
     public void onCreate(){
         super.onCreate();
         mMediaPlayer = new MediaPlayer();
+        mBinder = new MusicServiceBinder();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startID){
         String data = intent.getStringExtra(MainActivity.DATA_URI);
+        title = intent.getStringExtra(MainActivity.TITLE);
+        artist = intent.getStringExtra(MainActivity.ARTIST);
         Uri dataUri = Uri.parse(data);
 
         if(mMediaPlayer != null){
@@ -60,17 +66,23 @@ public class MusicService extends Service {
                 mMediaPlayer.setDataSource(getApplicationContext(), dataUri);
                 mMediaPlayer.prepare();
                 mMediaPlayer.start();
+
+                Intent musicStartIntent =
+                        new Intent(MainActivity.ACTION_MUSIC_START);
+                sendBroadcast(musicStartIntent);
             }
-            catch (IOException ex){
-                ex.printStackTrace();
+            catch (IOException mex){
+                mex.printStackTrace();
             }
         }
 
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
             mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
-                    "Music Channel", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Music Channel",
+                    NotificationManager.IMPORTANCE_HIGH);
 
             if(mNotificationManager != null){
                 mNotificationManager.createNotificationChannel(channel);
@@ -83,9 +95,6 @@ public class MusicService extends Service {
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID);
 
-        title = intent.getStringExtra(MainActivity.TITLE);
-        artist = intent.getStringExtra(MainActivity.ARTIST);
-
         Notification notification = builder.setContentTitle(title).setContentText(artist).setSmallIcon(R.drawable.ic_launcher_foreground).setContentIntent(pendingIntent).build();
 
         startForeground(ONGOING_NOTIFICATION_ID, notification);
@@ -94,9 +103,55 @@ public class MusicService extends Service {
     }
 
 
+    public class MusicServiceBinder extends Binder {
+        MusicService getService() {
+            return MusicService.this;
+        }
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
-        // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
+       return mBinder;
+    }
+
+    public void pause(){
+        if(mMediaPlayer != null && mMediaPlayer.isPlaying()){
+            mMediaPlayer.pause();
+        }
+    }
+
+    public void play(){
+        if(mMediaPlayer != null){
+            mMediaPlayer.start();
+        }
+    }
+
+    public int getDuration(){
+        int duration = 0;
+
+        if(mMediaPlayer != null){
+            duration  = mMediaPlayer.getDuration();
+        }
+
+        return duration;
+    }
+
+    public int getCurrentPosition(){
+        int position = 0;
+
+        if(mMediaPlayer != null){
+            position = mMediaPlayer.getCurrentPosition();
+        }
+
+        return position;
+    }
+
+    public boolean isPlaying(){
+
+        if(mMediaPlayer != null){
+                return mMediaPlayer.isPlaying();
+        }
+
+        return false;
     }
 }

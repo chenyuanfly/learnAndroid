@@ -23,7 +23,7 @@ import java.io.IOException;
 import static com.example.demo4_1.MainActivity.TITLE;
 
 public class MusicService extends Service {
-
+    private final IBinder mBinder = new MusicServiceBinder();
     MediaPlayer mMediaPlayer;
 
     String title;
@@ -33,9 +33,60 @@ public class MusicService extends Service {
     private static final String CHANNEL_ID = "Music channel";
     NotificationManager mNotificationManager;
 
-    private IBinder mBinder;
-
     public MusicService() {
+    }
+
+    //1
+    public class MusicServiceBinder extends Binder {
+        MusicService getService() {
+            return MusicService.this;
+        }
+    }
+
+    //2
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+    //3
+    public void pause(){
+        if(mMediaPlayer != null && mMediaPlayer.isPlaying()){
+            mMediaPlayer.pause();
+        }
+    }
+
+    //4
+    public void play(){
+        if(mMediaPlayer != null){
+            mMediaPlayer.start();
+        }
+    }
+
+    //5
+    public int getDuration(){
+        int duration = 0;
+        if(mMediaPlayer != null){
+            duration  = mMediaPlayer.getDuration();
+        }
+        return duration;
+    }
+
+    //6
+    public int getCurrentPosition(){
+        int position = 0;
+        if(mMediaPlayer != null){
+            position = mMediaPlayer.getCurrentPosition();
+        }
+        return position;
+    }
+
+    //7
+    public boolean isPlaying(){
+        if(mMediaPlayer != null){
+            return mMediaPlayer.isPlaying();
+        }
+        return false;
     }
 
     @Override
@@ -50,7 +101,6 @@ public class MusicService extends Service {
     public void onCreate(){
         super.onCreate();
         mMediaPlayer = new MediaPlayer();
-        mBinder = new MusicServiceBinder();
     }
 
     @Override
@@ -61,8 +111,8 @@ public class MusicService extends Service {
         Uri dataUri = Uri.parse(data);
 
         if(mMediaPlayer != null){
+            mMediaPlayer.reset();
             try {
-                mMediaPlayer.reset();
                 mMediaPlayer.setDataSource(getApplicationContext(), dataUri);
                 mMediaPlayer.prepare();
                 mMediaPlayer.start();
@@ -98,60 +148,6 @@ public class MusicService extends Service {
         Notification notification = builder.setContentTitle(title).setContentText(artist).setSmallIcon(R.drawable.ic_launcher_foreground).setContentIntent(pendingIntent).build();
 
         startForeground(ONGOING_NOTIFICATION_ID, notification);
-
         return super.onStartCommand(intent, flags, startID);
-    }
-
-
-    public class MusicServiceBinder extends Binder {
-        MusicService getService() {
-            return MusicService.this;
-        }
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-       return mBinder;
-    }
-
-    public void pause(){
-        if(mMediaPlayer != null && mMediaPlayer.isPlaying()){
-            mMediaPlayer.pause();
-        }
-    }
-
-    public void play(){
-        if(mMediaPlayer != null){
-            mMediaPlayer.start();
-        }
-    }
-
-    public int getDuration(){
-        int duration = 0;
-
-        if(mMediaPlayer != null){
-            duration  = mMediaPlayer.getDuration();
-        }
-
-        return duration;
-    }
-
-    public int getCurrentPosition(){
-        int position = 0;
-
-        if(mMediaPlayer != null){
-            position = mMediaPlayer.getCurrentPosition();
-        }
-
-        return position;
-    }
-
-    public boolean isPlaying(){
-
-        if(mMediaPlayer != null){
-                return mMediaPlayer.isPlaying();
-        }
-
-        return false;
     }
 }

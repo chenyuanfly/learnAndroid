@@ -43,46 +43,23 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
-
     private BottomNavigationView navigation;
     private TextView tvBottomTitle;
     private TextView tvBottomArtist;
     private ImageView ivAlbumThumbnail;
-    private ImageView ivPlay;
-
-    private Boolean mPlayStatus = true;
-
     private MediaPlayer mMediaPlayer = null;
-
     private final int REQUEST_EXTERNAL_STORAGE = 1;
     private static String[] PERMISSION_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
-
     private ContentResolver mContentResolver;
     private ListView mPlaylist;
     private MediaCursorAdapter mCursorAdapter;
     private Cursor mCursor;
-
-    public static final int UPDATE_PROGRESS = 1;
-    private ProgressBar pbProgress;
-
-    public static final String ACTION_MUSIC_START =
-            "com.example.demo4_1.ACTION_MUSIC_START";
-
-    public static final String ACTION_MUSIC_STOP =
-            "com.example.demo4_1.ACTION_MUSIC_STOP";
-
-    private MusicReceiver musicReceiver;
-
     public static final String DATA_URI = "com.example.demo4_1.DATE_URI";
     public static final String TITLE = "com.example.demo4_1.TITLE";
     public static final String ARTIST = "com.example.demo4_1.ARTIST";
-
-    private MusicService mService;
-    private boolean mBound = false;
-
     private final String SELECTION =
             MediaStore.Audio.Media.IS_MUSIC + " = ? " + " AND " +
                     MediaStore.Audio.Media.MIME_TYPE + " LIKE ? ";
@@ -91,37 +68,38 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             "audio/mpeg"
     };
 
-    //初始化数据
-    private void initPlaylist(){
-        mCursor = mContentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                null,
-                SELECTION,
-                SELECTION_ARGS,
-                MediaStore.Audio.Media.DEFAULT_SORT_ORDER
-        );
+    /*          ！！！！！！！       */
+    private MusicService mService;
+    private boolean mBound = false;
+    private Boolean mPlayStatus = true;
+    private ImageView ivPlay;
+    public static final int UPDATE_PROGRESS = 1;
+    private ProgressBar pbProgress;
+    public static final String ACTION_MUSIC_START =
+            "com.example.demo4_1.ACTION_MUSIC_START";
+    public static final String ACTION_MUSIC_STOP =
+            "com.example.demo4_1.ACTION_MUSIC_STOP";
+    private MusicReceiver musicReceiver;
 
-        mCursorAdapter.swapCursor(mCursor);
-        mCursorAdapter.notifyDataSetChanged();
-    }
+    /*          ？？？？？？？      */
+    private ServiceConnection mConn = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(
+                ComponentName componentName, IBinder iBinder) {
+            MusicService.MusicServiceBinder binder =
+                    (MusicService.MusicServiceBinder) iBinder;
 
-    private Handler mHandler = new Handler(Looper.getMainLooper()) {
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case UPDATE_PROGRESS:
-                    int position = msg.arg1;
-                    pbProgress.setProgress(position);
-                    break;
-                default:
-                    break;
-            }
+            mService = binder.getService();
+            mBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(
+                ComponentName componentName) {
+            mService = null;
+            mBound = false;
         }
     };
-
-//    @Override
-//    public void onClick(View v){
-//        Log.d("this: ", "click!");
-//    }
 
     @Override
     protected void onStart(){
@@ -129,7 +107,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 //        if(mMediaPlayer == null){
 //            mMediaPlayer = new MediaPlayer();
 //        }
-
         Intent intent = new Intent(MainActivity.this ,
                 MusicService.class);
         bindService(intent , mConn , Context.BIND_AUTO_CREATE);
@@ -149,6 +126,88 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     @Override
+    public void onClick(View view) {
+        if (view.getId() == R.id.iv_play) {
+            mPlayStatus = !mPlayStatus;
+            if (mPlayStatus == true) {
+                mService.play();
+                ivPlay.setImageResource(
+                        R.drawable.ic_baseline_pause_circle_outline_24);
+            } else {
+                mService.pause();
+                ivPlay.setImageResource(
+                        R.drawable.ic_baseline_play_circle_outline_24);
+            }
+        }
+    }
+
+    private Handler mHandler = new Handler(Looper.getMainLooper()) {
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case UPDATE_PROGRESS:
+                    int position = msg.arg1;
+                    pbProgress.setProgress(position);
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+
+    private class MusicProgressRunnable implements Runnable {
+        public MusicProgressRunnable() {
+        }
+
+        @Override
+        public void run() {
+            boolean mThreadWorking = true;
+            while (mThreadWorking) {
+                try {
+                    if (mService != null) {
+                        int position =
+                                mService.getCurrentPosition();
+                        Message message = new Message();
+                        message.what = UPDATE_PROGRESS;
+                        message.arg1 = position;
+                        mHandler.sendMessage(message);
+                    }
+                    mThreadWorking = mService.isPlaying();
+                    Thread.sleep(100);
+                } catch (InterruptedException mie) {
+                    mie.printStackTrace();
+                }
+            }
+        }
+    }
+
+    //有问题
+    public class MusicReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context , Intent intent) {
+            if (mService != null) {
+                pbProgress = navigation.findViewById(R.id.progress);
+                pbProgress.setMax(mService.getDuration());
+                new Thread(new MusicProgressRunnable()).start();
+            }
+        }
+    }
+
+    //初始化数据
+    private void initPlaylist(){
+        mCursor = mContentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                null,
+                SELECTION,
+                SELECTION_ARGS,
+                MediaStore.Audio.Media.DEFAULT_SORT_ORDER
+        );
+
+        mCursorAdapter.swapCursor(mCursor);
+        mCursorAdapter.notifyDataSetChanged();
+    }
+
+    @Override
     protected void onDestroy() {
 
         unregisterReceiver(musicReceiver);
@@ -160,6 +219,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        navigation = findViewById(R.id.navigation);
 
         mContentResolver = getContentResolver();
         mCursorAdapter = new MediaCursorAdapter(MainActivity.this);
@@ -177,7 +238,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             initPlaylist();
         }
 
-        navigation = findViewById(R.id.navigation);
         LayoutInflater.from(MainActivity.this).inflate(R.layout.bottom_media_toolbar, navigation, true);
 
         ivPlay = navigation.findViewById(R.id.iv_play);
@@ -189,7 +249,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             ivPlay.setOnClickListener(MainActivity.this);
         }
 
-        //navigation.setVisibility(View.GONE);
+//      navigation.setVisibility(View.GONE);
         musicReceiver = new MusicReceiver();
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(ACTION_MUSIC_START);
@@ -198,7 +258,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         //绑定音乐切换监听事件
         mPlaylist.setOnItemClickListener(setAdapter);
-
     }
 
     //请求获取权限并判断如何后续操作
@@ -212,23 +271,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             default:
                 break;
-        }
-    }
-
-    @Override
-    public void onClick(View view) {
-        if (view.getId() == R.id.iv_play) {
-            mPlayStatus = !mPlayStatus;
-            if (mPlayStatus == true) {
-                mService.play();
-                ivPlay.setImageResource(
-                        R.drawable.ic_baseline_pause_circle_outline_24);
-            } else {
-                mService.pause();
-                ivPlay.setImageResource(
-                        R.drawable.ic_baseline_play_circle_outline_24);
-
-            }
         }
     }
 
@@ -311,8 +353,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         int albumArtIndex = cursor.getColumnIndex(MediaStore.Audio.Albums.ALBUM_ART);
                         String albumArt = cursor.getString(albumArtIndex);
 
-                        Log.d("this", "albumArt: " + albumArt);
-
                         Glide.with(MainActivity.this).load(albumArt).into(ivAlbumThumbnail);
                         cursor.close();
                     }
@@ -327,61 +367,4 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
     };
-
-    private ServiceConnection mConn = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(
-                ComponentName componentName, IBinder iBinder) {
-            MusicService.MusicServiceBinder binder =
-                    (MusicService.MusicServiceBinder) iBinder;
-
-            mService = binder.getService();
-            mBound = true;
-        }
-
-        @Override
-        public void onServiceDisconnected(
-                ComponentName componentName) {
-            mService = null;
-            mBound = false;
-        }
-    };
-
-    private class MusicProgressRunnable implements Runnable {
-        public MusicProgressRunnable() {
-        }
-
-        @Override
-        public void run() {
-            boolean mThreadWorking = true;
-            while (mThreadWorking) {
-                try {
-                    if (mService != null) {
-                        int position =
-                                mService.getCurrentPosition();
-                        Message message = new Message();
-                        message.what = UPDATE_PROGRESS;
-                        message.arg1 = position;
-                        mHandler.sendMessage(message);
-                    }
-                    mThreadWorking = mService.isPlaying();
-                    Thread.sleep(100);
-                } catch (InterruptedException mie) {
-                    mie.printStackTrace();
-                }
-            }
-        }
-    }
-
-    public class MusicReceiver extends BroadcastReceiver {
-
-        @Override
-        public void onReceive(Context context , Intent intent) {
-            if (mService != null) {
-                pbProgress.setMax(mService.getDuration());
-                new Thread(new MusicProgressRunnable()).start();
-            }
-        }
-    }
-
 }
